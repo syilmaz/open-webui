@@ -6,7 +6,7 @@ name: Release
 
 on:
   push:
-    branches: [main, custom]
+    branches: [main]
 
 concurrency:
   group: release-${{ github.ref }}

@@ -2520,6 +2520,12 @@ LOGIN_SCREEN_SUBTITLE = ConfigVar(
     os.getenv('LOGIN_SCREEN_SUBTITLE', None),
 )
 
+WEBUI_LOGO_URL = ConfigVar(
+    'WEBUI_LOGO_URL',
+    'customization.logo_url',
+    os.getenv('WEBUI_LOGO_URL', None),
+)
+
 DEFAULT_MODELS = ConfigVar('DEFAULT_MODELS', 'ui.default_models', os.getenv('DEFAULT_MODELS', None))
 
 DEFAULT_PINNED_MODELS = ConfigVar(

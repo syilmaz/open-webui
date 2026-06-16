@@ -108,6 +108,8 @@
 
 	let newFolderId = null;
 
+	$: logoUrl = $config?.customization?.logo_url || `${WEBUI_BASE_URL}/static/favicon.png`;
+
 	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
 
 	const isMenuItemVisible = (id) => {
@@ -807,7 +809,7 @@
 					>
 						<div class=" self-center flex items-center justify-center size-9">
 							<img
-								src="{WEBUI_BASE_URL}/static/favicon.png"
+								src={logoUrl}
 								class="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden"
 								alt=""
 							/>
@@ -1017,8 +1019,8 @@
 					on:click={newChatHandler}
 				>
 					<img
-						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/favicon.png"
+						crossorigin={$config?.customization?.logo_url ? undefined : 'anonymous'}
+						src={logoUrl}
 						class="sidebar-new-chat-icon size-6 rounded-full"
 						alt=""
 					/>

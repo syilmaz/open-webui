@@ -33,6 +33,7 @@
 	let loaded = false;
 
 	$: loginScreenSubtitle = $config?.customization?.login_screen_subtitle;
+	$: logoUrl = $config?.customization?.logo_url || `${WEBUI_BASE_URL}/static/favicon.png`;
 
 	let mode = $config?.features.enable_ldap ? 'ldap' : 'signin';
 
@@ -147,9 +148,15 @@
 
 	async function setLogoImage() {
 		await tick();
-		const logo = document.getElementById('logo');
+		const logo = document.getElementById('logo') as HTMLImageElement | null;
 
 		if (logo) {
+			if ($config?.customization?.logo_url) {
+				logo.src = logoUrl;
+				logo.style.filter = '';
+				return;
+			}
+
 			const isDarkMode = document.documentElement.classList.contains('dark');
 
 			if (isDarkMode) {
@@ -264,8 +271,8 @@
 								<div class="flex justify-center mb-6">
 									<img
 										id="logo"
-										crossorigin="anonymous"
-										src="{WEBUI_BASE_URL}/static/favicon.png"
+										crossorigin={$config?.customization?.logo_url ? undefined : 'anonymous'}
+										src={logoUrl}
 										class="size-24 rounded-full"
 										alt="{$WEBUI_NAME} logo"
 									/>
@@ -622,8 +629,8 @@
 					<div class=" self-center">
 						<img
 							id="logo"
-							crossorigin="anonymous"
-							src="{WEBUI_BASE_URL}/static/favicon.png"
+							crossorigin={$config?.customization?.logo_url ? undefined : 'anonymous'}
+							src={logoUrl}
 							class=" w-6 rounded-full"
 							alt=""
 						/>

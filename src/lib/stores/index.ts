@@ -283,6 +283,7 @@ type Config = {
 	default_locale: string;
 	customization?: {
 		login_screen_subtitle?: string | null;
+		logo_url?: string | null;
 	};
 	default_models: string;
 	default_prompt_suggestions: PromptSuggestion[];

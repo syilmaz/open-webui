@@ -185,6 +185,7 @@ from open_webui.config import (
     ENABLE_LDAP_GROUP_MANAGEMENT,
     ENABLE_LOGIN_FORM,
     LOGIN_SCREEN_SUBTITLE,
+    WEBUI_LOGO_URL,
     ENABLE_MARKDOWN_HEADER_TEXT_SPLITTER,
     ENABLE_MEMORIES,
     ENABLE_MESSAGE_RATING,
@@ -870,6 +871,7 @@ app.state.config.WEBUI_URL = WEBUI_URL
 app.state.config.ENABLE_SIGNUP = ENABLE_SIGNUP
 app.state.config.ENABLE_LOGIN_FORM = ENABLE_LOGIN_FORM
 app.state.config.LOGIN_SCREEN_SUBTITLE = LOGIN_SCREEN_SUBTITLE
+app.state.config.WEBUI_LOGO_URL = WEBUI_LOGO_URL
 app.state.config.OAUTH_AUTO_REDIRECT = OAUTH_AUTO_REDIRECT
 app.state.config.ENABLE_PASSWORD_CHANGE_FORM = ENABLE_PASSWORD_CHANGE_FORM
 
@@ -2406,6 +2408,7 @@ async def get_app_config(request: Request):
         'default_locale': str(DEFAULT_LOCALE),
         'customization': {
             'login_screen_subtitle': app.state.config.LOGIN_SCREEN_SUBTITLE,
+            'logo_url': app.state.config.WEBUI_LOGO_URL,
         },
         'oauth': {
             'providers': {name: config.get('name', name) for name, config in OAUTH_PROVIDERS.items()},
@@ -2857,6 +2860,7 @@ async def get_manifest_json():
             r.raise_for_status()
             return await r.json()
     else:
+        logo_url = app.state.config.WEBUI_LOGO_URL or '/static/logo.png'
         return {
             'name': app.state.WEBUI_NAME,
             'short_name': app.state.WEBUI_NAME,
@@ -2866,13 +2870,13 @@ async def get_manifest_json():
             'background_color': '#343541',
             'icons': [
                 {
-                    'src': '/static/logo.png',
+                    'src': logo_url,
                     'type': 'image/png',
                     'sizes': '500x500',
                     'purpose': 'any',
                 },
                 {
-                    'src': '/static/logo.png',
+                    'src': logo_url,
                     'type': 'image/png',
                     'sizes': '500x500',
                     'purpose': 'maskable',
@@ -2888,12 +2892,13 @@ async def get_manifest_json():
 
 @app.get('/opensearch.xml')
 async def get_opensearch_xml():
+    logo_url = app.state.config.WEBUI_LOGO_URL or f'{app.state.config.WEBUI_URL}/static/favicon.png'
     xml_content = rf"""
     <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/" xmlns:moz="http://www.mozilla.org/2006/browser/search/">
     <ShortName>{app.state.WEBUI_NAME}</ShortName>
     <Description>Search {app.state.WEBUI_NAME}</Description>
     <InputEncoding>UTF-8</InputEncoding>
-    <Image width="16" height="16" type="image/x-icon">{app.state.config.WEBUI_URL}/static/favicon.png</Image>
+    <Image width="16" height="16" type="image/x-icon">{logo_url}</Image>
     <Url type="text/html" method="get" template="{app.state.config.WEBUI_URL}/?q={'{searchTerms}'}"/>
     <moz:SearchForm>{app.state.config.WEBUI_URL}</moz:SearchForm>
     </OpenSearchDescription>

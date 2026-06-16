@@ -500,7 +500,7 @@
 				if ($settings?.notificationEnabled ?? false) {
 					new Notification(`${data.title} • Open WebUI`, {
 						body: timeStr,
-						icon: `${WEBUI_BASE_URL}/static/favicon.png`
+						icon: logoUrl
 					});
 				}
 			}
@@ -631,7 +631,7 @@
 						if ($settings?.notificationEnabled ?? false) {
 							new Notification(`${displayTitle} • Open WebUI`, {
 								body: content,
-								icon: `${WEBUI_BASE_URL}/static/favicon.png`
+								icon: logoUrl
 							});
 						}
 					}
@@ -1158,11 +1158,13 @@
 	onDestroy(() => {
 		bc.close();
 	});
+
+	$: logoUrl = $config?.customization?.logo_url || `${WEBUI_BASE_URL}/static/favicon.png`;
 </script>
 
 <svelte:head>
 	<title>{$WEBUI_NAME}</title>
-	<link crossorigin="anonymous" rel="icon" href="{WEBUI_BASE_URL}/static/favicon.png" />
+	<link crossorigin={$config?.customization?.logo_url ? undefined : 'anonymous'} rel="icon" href={logoUrl} />
 
 	<meta name="apple-mobile-web-app-title" content={$WEBUI_NAME} />
 	<meta name="description" content={$WEBUI_NAME} />
