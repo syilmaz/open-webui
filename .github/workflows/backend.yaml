@@ -6,10 +6,10 @@ name: Python CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, custom]
     paths: ['backend/**', 'pyproject.toml', 'uv.lock']
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, custom]
     paths: ['backend/**', 'pyproject.toml', 'uv.lock']
 
 concurrency:

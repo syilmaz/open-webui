@@ -6,10 +6,10 @@ name: Frontend Build
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, custom]
     paths-ignore: ['backend/**', 'pyproject.toml', 'uv.lock']
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev, custom]
     paths-ignore: ['backend/**', 'pyproject.toml', 'uv.lock']
 
 concurrency:
