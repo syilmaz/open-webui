@@ -98,6 +98,11 @@
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { getFunctions } from '$lib/apis/functions';
 	import { updateFolderById } from '$lib/apis/folders';
+	import {
+		createAgentInitialHistory,
+		getAgentById,
+		type AgentDefinition
+	} from '$lib/agents';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -116,8 +121,11 @@
 	import { getBanners } from '$lib/apis/configs';
 
 	export let chatIdProp = '';
+	export let agentId = '';
 
 	let loading = true;
+	let activeAgentId = '';
+	let activeAgent: AgentDefinition | null = null;
 
 	const eventTarget = new EventTarget();
 	let controlPane: Pane | undefined;
@@ -186,6 +194,10 @@
 
 	$: if (chatIdProp) {
 		navigateHandler();
+	}
+
+	$: if (agentId && agentId !== activeAgentId) {
+		initAgentChat(agentId);
 	}
 
 	let saveControlsTimer;
@@ -1150,8 +1162,13 @@
 	// Web functions
 	//////////////////////////
 
-	const initNewChat = async () => {
+	const initNewChat = async ({ preserveAgent = false }: { preserveAgent?: boolean } = {}) => {
 		console.log('initNewChat');
+		if (!preserveAgent) {
+			activeAgentId = '';
+			activeAgent = null;
+		}
+
 		if ($user?.role !== 'admin' && $user?.permissions?.chat?.temporary_enforced) {
 			await temporaryChatEnabled.set(true);
 		}
@@ -1384,6 +1401,88 @@
 
 		const chatInput = document.getElementById('chat-input');
 		setTimeout(() => chatInput?.focus(), 0);
+	};
+
+	const initAgentChat = async (_agentId: string) => {
+		const agent = getAgentById(_agentId);
+
+		if (!agent) {
+			activeAgentId = _agentId;
+			toast.error($i18n.t('Agent not found'));
+			await goto('/');
+			return;
+		}
+
+		loading = true;
+		activeAgentId = _agentId;
+		await initNewChat({ preserveAgent: true });
+
+		activeAgentId = agent.id;
+		activeAgent = agent;
+		params = {
+			...params,
+			agent_system_prompt: agent.systemPrompt,
+			agent_id: agent.id
+		};
+
+		if (
+			agent.modelIds?.length &&
+			!$page.url.searchParams.get('model') &&
+			!$page.url.searchParams.get('models')
+		) {
+			const availableAgentModels = agent.modelIds.filter((modelId) =>
+				$models.some((model) => model.id === modelId && !(model?.info?.meta?.hidden ?? false))
+			);
+
+			if (availableAgentModels.length > 0) {
+				selectedModels = availableAgentModels;
+			}
+		}
+
+		await chatTitle.set(agent.name);
+		await selectedFolder.set(null);
+
+		loading = false;
+		await tick();
+
+		const chatInput = document.getElementById('chat-input');
+		chatInput?.focus();
+	};
+
+	const getAgentHistoryForPersistence = () => {
+		if (!activeAgent) {
+			return history;
+		}
+
+		const rootMessage = Object.values(history.messages).find(
+			(message: any) => message?.parentId === null && message?.role === 'user'
+		) as any;
+
+		if (!rootMessage) {
+			return history;
+		}
+
+		const agentHistory = createAgentInitialHistory(activeAgent);
+		const greetingId = agentHistory.currentId;
+		if (!greetingId) {
+			return history;
+		}
+		const greetingMessage = agentHistory.messages[greetingId];
+
+		return {
+			...history,
+			messages: {
+				...history.messages,
+				[greetingId]: {
+					...greetingMessage,
+					childrenIds: [rootMessage.id]
+				},
+				[rootMessage.id]: {
+					...rootMessage,
+					parentId: greetingId
+				}
+			}
+		};
 	};
 
 	const loadChat = async () => {
@@ -2256,6 +2355,66 @@
 			.map((token) => decodeURIComponent(JSON.parse(`"${token.replace(/"/g, '\\"')}"`)));
 	};
 
+	const formatAgentInstruction = (instruction: string) => {
+		return `<agent_instruction>\n${instruction}\n</agent_instruction>\n\n`;
+	};
+
+	const applyAgentInstructionToContent = (content: any, instruction: string) => {
+		const prefix = formatAgentInstruction(instruction);
+
+		if (typeof content === 'string') {
+			return `${prefix}${content}`;
+		}
+
+		if (Array.isArray(content)) {
+			let applied = false;
+			const updated = content.map((part) => {
+				if (!applied && (part?.type === 'text' || part?.type === 'input_text')) {
+					applied = true;
+					return {
+						...part,
+						text: `${prefix}${part.text ?? ''}`
+					};
+				}
+
+				return part;
+			});
+
+			return applied ? updated : [{ type: 'text', text: prefix }, ...updated];
+		}
+
+		return `${prefix}${content ?? ''}`;
+	};
+
+	const applyAgentInstructionToMessage = (message: any, instruction: string) => {
+		if (!message) {
+			return message;
+		}
+
+		return {
+			...message,
+			content: applyAgentInstructionToContent(message.content, instruction)
+		};
+	};
+
+	const applyAgentInstructionToLastUserMessage = (messages: any[], instruction: string) => {
+		let lastUserMessageIndex = -1;
+		for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
+			if (messages[idx]?.role === 'user') {
+				lastUserMessageIndex = idx;
+				break;
+			}
+		}
+
+		if (lastUserMessageIndex === -1) {
+			return messages;
+		}
+
+		return messages.map((message, idx) =>
+			idx === lastUserMessageIndex ? applyAgentInstructionToMessage(message, instruction) : message
+		);
+	};
+
 	const sendMessageSocket = async (
 		model,
 		_messages,
@@ -2319,12 +2478,22 @@
 			$settings?.params?.stream_response ??
 			params?.stream_response ??
 			true;
+		const agentInstruction = [
+			(params as Record<string, any>)?.agent_system_prompt ??
+				((params as Record<string, any>)?.agent_id ? params?.system : ''),
+			(params as Record<string, any>)?.agent_id ? ($settings.system ?? '') : ''
+		]
+			.filter(Boolean)
+			.join('\n\n');
+		const systemPrompt = (params as Record<string, any>)?.agent_id
+			? ''
+			: `${params?.system ?? $settings?.system ?? ''}`;
+
 		// Always include system prompt — backend extracts it and prepends to DB messages.
+		// Agent prompts are injected as user-message instructions for Azure/Mistral compatibility.
 		// Only temp chats need conversation messages (persisted chats load from DB).
 		let messages = [
-			params?.system || $settings.system
-				? { role: 'system', content: `${params?.system ?? $settings?.system ?? ''}` }
-				: undefined
+			systemPrompt ? { role: 'system', content: systemPrompt } : undefined
 		].filter(Boolean);
 
 		if ($temporaryChatEnabled) {
@@ -2425,6 +2594,14 @@
 			});
 		}
 
+		if (agentInstruction) {
+			messages = applyAgentInstructionToLastUserMessage(messages, agentInstruction);
+		}
+
+		const requestUserMessage = agentInstruction
+			? applyAgentInstructionToMessage(userMessage, agentInstruction)
+			: userMessage;
+
 		// Use the user-selected terminal from the dropdown
 		const activeTerminalId = $selectedTerminalId ?? null;
 
@@ -2473,7 +2650,7 @@
 				id: responseMessageId,
 				...(messageIdsMap ? { message_ids: messageIdsMap } : {}),
 				parent_id: userMessage?.parentId ?? null,
-				user_message: userMessage,
+				user_message: requestUserMessage,
 				...(regenerationPrompt ? { regeneration_prompt: regenerationPrompt } : {}),
 				...(continueResponse ? { assistant_message_id: responseMessageId } : {}),
 
@@ -2551,9 +2728,19 @@
 						// chat completion request.  Files are now persisted
 						// by the backend at chat creation time.
 						if (Object.keys(params).length > 0) {
-							await updateChatById(localStorage.token, res.chat_id, {
+							const chatPatch: Record<string, any> = {
 								params: params
-							});
+							};
+
+							if ((params as Record<string, any>)?.agent_id) {
+								const agentHistory = getAgentHistoryForPersistence();
+
+								chatPatch.title = $chatTitle;
+								chatPatch.history = agentHistory;
+								chatPatch.messages = createMessagesList(agentHistory, agentHistory.currentId);
+							}
+
+							await updateChatById(localStorage.token, res.chat_id, chatPatch);
 						}
 					}
 				}
@@ -3226,6 +3413,7 @@
 									bind:atSelectedModel
 									bind:showCommands
 									bind:dragged
+									agent={activeAgent}
 									{pendingOAuthTools}
 									toolServers={$toolServers}
 									{stopResponse}

@@ -41,6 +41,7 @@
 	export let selectedModels: [''];
 
 	export let history;
+	export let agent = null;
 
 	export let prompt = '';
 	export let files = [];
@@ -145,7 +146,17 @@
 						class=" text-3xl @sm:text-3xl line-clamp-1 flex items-center"
 						in:fade={{ duration: 100 }}
 					>
-						{#if models[selectedModelIdx]?.name}
+						{#if agent}
+							<Tooltip
+								content={agent.name}
+								placement="top"
+								className=" flex items-center "
+							>
+								<span class="line-clamp-1">
+									<span class="mr-2" aria-hidden="true">{agent.icon}</span>{agent.name}
+								</span>
+							</Tooltip>
+						{:else if models[selectedModelIdx]?.name}
 							<Tooltip
 								content={models[selectedModelIdx]?.name}
 								placement="top"
@@ -163,7 +174,27 @@
 
 				<div class="flex mt-1 mb-2">
 					<div in:fade={{ duration: 100, delay: 50 }}>
-						{#if models[selectedModelIdx]?.info?.meta?.description ?? null}
+						{#if agent}
+							<Tooltip
+								className=" w-fit"
+								content={DOMPurify.sanitize(
+									marked.parse(
+										sanitizeResponseContent(agent.description ?? '').replaceAll('\n', '<br>')
+									)
+								)}
+								placement="top"
+							>
+								<div
+									class="mt-0.5 px-2 text-sm font-normal text-gray-500 dark:text-gray-400 line-clamp-2 max-w-xl markdown"
+								>
+									{@html DOMPurify.sanitize(
+										marked.parse(
+											sanitizeResponseContent(agent.helloMessage ?? '').replaceAll('\n', '<br>')
+										)
+									)}
+								</div>
+							</Tooltip>
+						{:else if models[selectedModelIdx]?.info?.meta?.description ?? null}
 							<Tooltip
 								className=" w-fit"
 								content={DOMPurify.sanitize(

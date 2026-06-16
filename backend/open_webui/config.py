@@ -2514,6 +2514,12 @@ DEFAULT_LOCALE = ConfigVar(
     os.getenv('DEFAULT_LOCALE', ''),
 )
 
+LOGIN_SCREEN_SUBTITLE = ConfigVar(
+    'LOGIN_SCREEN_SUBTITLE',
+    'customization.login_screen_subtitle',
+    os.getenv('LOGIN_SCREEN_SUBTITLE', None),
+)
+
 DEFAULT_MODELS = ConfigVar('DEFAULT_MODELS', 'ui.default_models', os.getenv('DEFAULT_MODELS', None))
 
 DEFAULT_PINNED_MODELS = ConfigVar(

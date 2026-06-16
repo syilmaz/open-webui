@@ -73,6 +73,8 @@ def remove_open_webui_params(params: dict) -> dict:
         'function_calling': str,
         'reasoning_tags': list,
         'system': str,
+        'agent_id': str,
+        'agent_system_prompt': str,
     }
 
     for key in list(params.keys()):

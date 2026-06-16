@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type i18nType from '$lib/i18n';
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
 	import Sortable from 'sortablejs';
@@ -33,7 +34,7 @@
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
-	const i18n = getContext('i18n');
+	const i18n: typeof i18nType = getContext('i18n');
 
 	import {
 		getChatList,
@@ -52,10 +53,12 @@
 	import { checkActiveChats } from '$lib/apis/tasks';
 	import { createNoteHandler } from '$lib/components/notes/utils';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import { agents } from '$lib/agents';
 
 	import ArchivedChatsModal from './ArchivedChatsModal.svelte';
 	import UserMenu from './Sidebar/UserMenu.svelte';
 	import ChatItem from './Sidebar/ChatItem.svelte';
+	import AgentItem from './Sidebar/AgentItem.svelte';
 	import Spinner from '../common/Spinner.svelte';
 	import Loader from '../common/Loader.svelte';
 	import Folder from '../common/Folder.svelte';
@@ -96,6 +99,7 @@
 
 	let showPinnedModels = false;
 	let showPinnedNotes = false;
+	let showAgents = true;
 	let showChannels = false;
 	let showFolders = false;
 
@@ -1185,6 +1189,23 @@
 						{/each}
 					</div>
 				</div>
+
+				{#if agents.length > 0}
+					<Folder
+						id="sidebar-agents"
+						bind:open={showAgents}
+						className="px-2 mt-0.5"
+						name={$i18n.t('Agents')}
+						chevron={false}
+						dragAndDrop={false}
+					>
+						<div class="mt-0.5 pb-1.5">
+							{#each agents as agent (agent.id)}
+								<AgentItem {agent} onClick={itemClickHandler} />
+							{/each}
+						</div>
+					</Folder>
+				{/if}
 
 				{#if ($models ?? []).length > 0 && (($settings?.pinnedModels ?? []).length > 0 || $config?.default_pinned_models)}
 					<Folder

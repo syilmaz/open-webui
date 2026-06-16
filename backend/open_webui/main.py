@@ -184,6 +184,7 @@ from open_webui.config import (
     # LDAP Group Management
     ENABLE_LDAP_GROUP_MANAGEMENT,
     ENABLE_LOGIN_FORM,
+    LOGIN_SCREEN_SUBTITLE,
     ENABLE_MARKDOWN_HEADER_TEXT_SPLITTER,
     ENABLE_MEMORIES,
     ENABLE_MESSAGE_RATING,
@@ -868,6 +869,7 @@ app.state.BASE_MODELS = []
 app.state.config.WEBUI_URL = WEBUI_URL
 app.state.config.ENABLE_SIGNUP = ENABLE_SIGNUP
 app.state.config.ENABLE_LOGIN_FORM = ENABLE_LOGIN_FORM
+app.state.config.LOGIN_SCREEN_SUBTITLE = LOGIN_SCREEN_SUBTITLE
 app.state.config.OAUTH_AUTO_REDIRECT = OAUTH_AUTO_REDIRECT
 app.state.config.ENABLE_PASSWORD_CHANGE_FORM = ENABLE_PASSWORD_CHANGE_FORM
 
@@ -2402,6 +2404,9 @@ async def get_app_config(request: Request):
         'name': app.state.WEBUI_NAME,
         'version': VERSION,
         'default_locale': str(DEFAULT_LOCALE),
+        'customization': {
+            'login_screen_subtitle': app.state.config.LOGIN_SCREEN_SUBTITLE,
+        },
         'oauth': {
             'providers': {name: config.get('name', name) for name, config in OAUTH_PROVIDERS.items()},
             'auto_redirect': app.state.config.OAUTH_AUTO_REDIRECT,

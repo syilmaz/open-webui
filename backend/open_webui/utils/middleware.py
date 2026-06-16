@@ -2075,6 +2075,8 @@ def apply_params_to_form_data(form_data, model):
         'function_calling': str,
         'reasoning_tags': list,
         'system': str,
+        'agent_id': str,
+        'agent_system_prompt': str,
     }
 
     for key in list(params.keys()):

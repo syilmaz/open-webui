@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type i18nType from '$lib/i18n';
 	import DOMPurify from 'dompurify';
 	import { marked } from 'marked';
 
@@ -27,9 +28,11 @@
 	import SensitiveInput from '$lib/components/common/SensitiveInput.svelte';
 	import { redirect } from '@sveltejs/kit';
 
-	const i18n = getContext('i18n');
+	const i18n: typeof i18nType = getContext('i18n');
 
 	let loaded = false;
+
+	$: loginScreenSubtitle = $config?.customization?.login_screen_subtitle;
 
 	let mode = $config?.features.enable_ldap ? 'ldap' : 'signin';
 
@@ -294,6 +297,12 @@
 											{$i18n.t(
 												'does not make any external connections, and your data stays securely on your locally hosted server.'
 											)}
+										</div>
+									{:else if loginScreenSubtitle}
+										<div
+											class="mt-2 text-sm font-normal text-gray-600 dark:text-gray-400 marked"
+										>
+											{@html DOMPurify.sanitize(marked.parse(loginScreenSubtitle))}
 										</div>
 									{/if}
 								</div>
