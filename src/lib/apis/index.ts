@@ -1,5 +1,6 @@
 import { WEBUI_BASE_URL } from '$lib/constants';
-import { convertOpenApiToToolPayload } from '$lib/utils';
+import { convertOpenApiToToolPayload, resolveSchema } from '$lib/utils';
+import { normalizeTags } from '$lib/utils/tags';
 import { getOpenAIModelsDirect } from './openai';
 
 const TOOL_SERVER_FETCH_TIMEOUT = 10000;
@@ -141,8 +142,8 @@ export const getModels = async (
 					}
 				}
 
-				const tags = apiConfig.tags;
-				if (tags) {
+				const tags = normalizeTags(apiConfig.tags);
+				if (tags.length > 0) {
 					for (const model of models) {
 						model.tags = tags;
 					}
@@ -163,7 +164,14 @@ export const getModels = async (
 		// Remove duplicates
 		const modelsMap = {};
 		for (const model of models) {
-			modelsMap[model.id] = model;
+			const existing = modelsMap[model.id];
+			modelsMap[model.id] = existing
+				? {
+						...existing,
+						...model,
+						info: existing.info ?? model.info
+					}
+				: model;
 		}
 
 		models = Object.values(modelsMap);
@@ -590,10 +598,12 @@ export const executeToolServer = async (
 		const pathParams: Record<string, any> = {};
 		const queryParams: Record<string, any> = {};
 		let bodyParams: any = {};
+		const declaredParamNames = new Set<string>();
 
 		for (const param of mergedParams.values()) {
 			const paramName = param?.name;
 			if (!paramName) continue;
+			declaredParamNames.add(paramName);
 			const paramIn = param?.in;
 			if (params.hasOwnProperty(paramName)) {
 				if (paramIn === 'path') {
@@ -623,7 +633,24 @@ export const executeToolServer = async (
 		if (operation.requestBody && operation.requestBody.content) {
 			const contentType = Object.keys(operation.requestBody.content)[0];
 			if (params !== undefined) {
-				bodyParams = params;
+				const jsonSchema = operation.requestBody.content['application/json']?.schema;
+				const resolvedBodySchema = resolveSchema(jsonSchema, serverData.openapi.components);
+				const isComposedSchema = ['allOf', 'anyOf', 'oneOf'].some(
+					(keyword) => keyword in resolvedBodySchema
+				);
+				const bodyProperties = isComposedSchema ? {} : (resolvedBodySchema.properties ?? {});
+				// Strict servers reject declared parameters in the body, unless the body schema declares them too.
+				if (Object.keys(bodyProperties).length > 0) {
+					bodyParams = Object.fromEntries(
+						Object.entries(params).filter(
+							([key]) =>
+								Object.prototype.hasOwnProperty.call(bodyProperties, key) ||
+								!declaredParamNames.has(key)
+						)
+					);
+				} else {
+					bodyParams = params;
+				}
 			} else {
 				// Optional: Fallback or explicit error if body is expected but not provided
 				throw new Error(`Request body expected for operation '${name}' but none found.`);
@@ -930,7 +957,7 @@ export const generateEmoji = async (
 		throw error;
 	}
 
-	const response = res?.choices[0]?.message?.content.replace(/["']/g, '') ?? null;
+	const response = res?.choices[0]?.message?.content?.replace(/["']/g, '') ?? null;
 
 	if (response) {
 		if (/\p{Extended_Pictographic}/u.test(response)) {
@@ -1572,10 +1599,34 @@ export const getVersionUpdates = async (token: string) => {
 	return res;
 };
 
-export const getWebhookUrl = async (token: string) => {
+export type EventCatalogItem = {
+	event: string;
+	description: string;
+	message: string;
+};
+
+export type EventWebhookTarget = {
+	type: 'user' | 'group';
+	id: string;
+};
+
+export type EventWebhook = {
+	id: string;
+	name: string;
+	url: string;
+	enabled: boolean;
+	events: string[];
+	targets: EventWebhookTarget[] | null;
+	created_at?: number;
+	updated_at?: number;
+};
+
+export const getEvents = async (
+	token: string
+): Promise<{ schema: string; events: EventCatalogItem[] }> => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_BASE_URL}/api/webhook`, {
+	const res = await fetch(`${WEBUI_BASE_URL}/api/events`, {
 		method: 'GET',
 		headers: {
 			'Content-Type': 'application/json',
@@ -1596,21 +1647,18 @@ export const getWebhookUrl = async (token: string) => {
 		throw error;
 	}
 
-	return res.url;
+	return res;
 };
 
-export const updateWebhookUrl = async (token: string, url: string) => {
+export const getEventWebhooks = async (token: string): Promise<EventWebhook[]> => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_BASE_URL}/api/webhook`, {
-		method: 'POST',
+	const res = await fetch(`${WEBUI_BASE_URL}/api/events/webhooks`, {
+		method: 'GET',
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify({
-			url: url
-		})
+		}
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
@@ -1626,7 +1674,97 @@ export const updateWebhookUrl = async (token: string, url: string) => {
 		throw error;
 	}
 
-	return res.url;
+	return res;
+};
+
+export const createEventWebhook = async (
+	token: string,
+	webhook: Partial<EventWebhook>
+): Promise<EventWebhook> => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_BASE_URL}/api/events/webhooks`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(webhook)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const updateEventWebhook = async (
+	token: string,
+	id: string,
+	webhook: Partial<EventWebhook>
+): Promise<EventWebhook> => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_BASE_URL}/api/events/webhooks/${id}`, {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(webhook)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const deleteEventWebhook = async (token: string, id: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_BASE_URL}/api/events/webhooks/${id}`, {
+		method: 'DELETE',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
 };
 
 export interface ModelConfig {
@@ -1640,8 +1778,11 @@ export interface ModelConfig {
 export interface ModelMeta {
 	toolIds: never[];
 	description?: string;
+	i18n?: Record<string, Record<string, any>>;
+	hidden?: boolean;
 	capabilities?: object;
 	profile_image_url?: string;
+	background_image_url?: string | null;
 }
 
 export interface ModelParams {}
